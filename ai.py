@@ -22,8 +22,8 @@ client = OpenAI(
 )
 
 # Нормальные модели OpenRouter (меняй в .env при желании)
-TEXT_MODEL = os.getenv("TEXT_MODEL", "openai/gpt-4o-mini")
-VISION_MODEL = os.getenv("VISION_MODEL", "openai/gpt-4o-mini")
+TEXT_MODEL = os.getenv("TEXT_MODEL", "google/gemini-2.5-flash")
+VISION_MODEL = os.getenv("VISION_MODEL", "google/gemini-2.5-flash")
 
 SYSTEM_COACH = (
     "Ты — профессиональный фитнес-тренер и нутрициолог. "
