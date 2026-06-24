@@ -1,14 +1,29 @@
-"""Обёртка над Groq: генерация плана и анализ формы по фото."""
+"""Обёртка над OpenRouter (через Cloudflare-воркер): план и анализ формы по фото.
+
+Бот не знает ключ OpenRouter — он ходит на воркер (OPENROUTER_BASE_URL),
+а ключ подставляется внутри воркера. Доступ к воркеру защищён PROXY_SECRET.
+"""
 import os
 import base64
-from groq import Groq
+from openai import OpenAI
 
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+# Базовый URL = твой Cloudflare-воркер (он же эмулирует /chat/completions).
+BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+PROXY_SECRET = os.getenv("PROXY_SECRET", "")
 
-# Текстовая модель для планов
-TEXT_MODEL = "llama-3.3-70b-versatile"
-# Vision-модель для анализа фото
-VISION_MODEL = "llama-3.2-90b-vision-preview"
+# Ключ боту не нужен (его держит воркер). Если ходишь напрямую в OpenRouter —
+# задай OPENROUTER_API_KEY. Для SDK нужно непустое значение, поэтому "proxy".
+API_KEY = os.getenv("OPENROUTER_API_KEY", "proxy")
+
+client = OpenAI(
+    base_url=BASE_URL,
+    api_key=API_KEY,
+    default_headers={"X-Proxy-Secret": PROXY_SECRET} if PROXY_SECRET else {},
+)
+
+# Нормальные модели OpenRouter (меняй в .env при желании)
+TEXT_MODEL = os.getenv("TEXT_MODEL", "openai/gpt-4o-mini")
+VISION_MODEL = os.getenv("VISION_MODEL", "openai/gpt-4o-mini")
 
 SYSTEM_COACH = (
     "Ты — профессиональный фитнес-тренер и нутрициолог. "

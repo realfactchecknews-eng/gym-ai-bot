@@ -11,22 +11,32 @@
 
 ## Технологии
 - [aiogram 3](https://docs.aiogram.dev/) — Telegram-бот на polling.
-- [Groq](https://console.groq.com/) — `llama-3.3-70b` (текст) + `llama-3.2-90b-vision` (фото).
+- [OpenRouter](https://openrouter.ai/) — доступ к топовым моделям (`gpt-4o-mini` и др.),
+  совместим с OpenAI SDK.
+- [Cloudflare Worker](worker/) — прокси, который **прячет ключ OpenRouter**: бот ходит
+  на воркер, ключ хранится в секретах Cloudflare.
+
+```
+Бот (BotHost)  ──X-Proxy-Secret──▶  Cloudflare Worker  ──OPENROUTER_API_KEY──▶  OpenRouter
+```
 
 ## Запуск локально
+1. Задеплой воркер — см. [worker/README.md](worker/README.md).
+2. Затем бот:
 ```bash
 pip install -r requirements.txt
-cp .env.example .env   # вписать BOT_TOKEN и GROQ_API_KEY
+cp .env.example .env   # вписать BOT_TOKEN, OPENROUTER_BASE_URL, PROXY_SECRET
 python bot.py
 ```
 
-Токен бота — у [@BotFather](https://t.me/BotFather), ключ Groq — на
-[console.groq.com/keys](https://console.groq.com/keys).
+Токен бота — у [@BotFather](https://t.me/BotFather), ключ OpenRouter — на
+[openrouter.ai/keys](https://openrouter.ai/keys) (живёт только в воркере).
 
 ## Хостинг на BotHost
 1. Залить репозиторий или папку проекта.
 2. Команда запуска: `python bot.py`.
-3. В переменные окружения добавить `BOT_TOKEN` и `GROQ_API_KEY`.
+3. В переменные окружения добавить `BOT_TOKEN`, `OPENROUTER_BASE_URL`, `PROXY_SECRET`
+   (и при желании `TEXT_MODEL` / `VISION_MODEL`). Ключа OpenRouter тут нет.
 
 `Procfile` уже настроен (`worker: python bot.py`).
 

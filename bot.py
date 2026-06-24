@@ -239,8 +239,8 @@ def split(text: str, limit: int = 4000):
 
 
 async def main():
-    if not os.getenv("BOT_TOKEN") or not os.getenv("GROQ_API_KEY"):
-        raise SystemExit("Заполни BOT_TOKEN и GROQ_API_KEY в .env")
+    if not os.getenv("BOT_TOKEN") or not os.getenv("OPENROUTER_BASE_URL"):
+        raise SystemExit("Заполни BOT_TOKEN и OPENROUTER_BASE_URL в .env")
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
 
