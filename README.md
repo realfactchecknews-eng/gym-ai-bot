@@ -42,8 +42,16 @@ python bot.py
 ## Хостинг на BotHost
 1. Залить репозиторий или папку проекта.
 2. Команда запуска: `python bot.py`.
-3. В переменные окружения добавить `BOT_TOKEN`, `OPENROUTER_BASE_URL`, `PROXY_SECRET`
-   (и при желании `TEXT_MODEL` / `VISION_MODEL`). Ключа OpenRouter тут нет.
+3. В переменные окружения добавить `BOT_TOKEN`, `OPENROUTER_BASE_URL`, `PROXY_SECRET`,
+   `DATABASE_URL` (и при желании `TEXT_MODEL` / `VISION_MODEL`). Ключа OpenRouter тут нет.
+
+## База данных
+Данные (анкеты, планы, статистика, настройки) хранятся в **Postgres** —
+задай `DATABASE_URL`. Без него бот пишет в локальный `data.json` (для разработки).
+
+Бесплатный Postgres за минуту — [Neon](https://neon.tech):
+1. Создай проект → скопируй **Connection string** (`postgresql://...`).
+2. Вставь в `DATABASE_URL`. Таблица `users` создаётся автоматически при старте.
 
 `Procfile` уже настроен (`worker: python bot.py`).
 
