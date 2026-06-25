@@ -85,8 +85,9 @@ def split(text: str, limit: int = 4000):
 
 
 async def send_long(target, text: str):
+    # ИИ может вернуть несбалансированный Markdown — шлём без парсинга разметки
     for chunk in split(text):
-        await target.answer(chunk)
+        await target.answer(chunk, parse_mode=None)
 
 
 async def with_thinking(msg: Message, fn, *args):
