@@ -1,7 +1,9 @@
 # 💪 Gym Bot — ИИ-тренер в Telegram
 
 Телеграм-бот, который по анкете подбирает **диету** и **программу тренировок**,
-а также **оценивает форму по фото** и советует, что подкачать. Под капотом — ИИ Groq.
+а также **оценивает форму по фото** и советует, что подкачать. ИИ — через OpenRouter.
+
+> Бот в проде: **@mellgym_bot** (название MELLGYM). Хостинг — BotHost.
 
 ## Возможности
 - 📋 **Анкета**: пол, возраст, рост, вес, уровень, частота, место, цель.
@@ -57,13 +59,52 @@ python bot.py
 
 ## Структура
 ```
-bot.py          # хендлеры, FSM-анкета, клавиатуры
-ai.py           # обёртка над Groq: план, анализ фото, чат
-storage.py      # хранение профилей в data.json
+bot.py          # хендлеры, FSM-анкета, клавиатуры, все вкладки
+ai.py           # OpenRouter (OpenAI SDK): план, JSON-план, анализ фото, чат с памятью
+storage.py      # данные: Postgres (DATABASE_URL) либо JSON-файл (fallback)
+reminders.py    # APScheduler: напоминания тренировки/креатин/вода/сон (TZ Europe/Moscow)
+worker/README.md# код и деплой Cloudflare-воркера (прокси к OpenRouter)
 requirements.txt
-Procfile
+Procfile        # worker: python bot.py
 .env.example
 ```
+
+## 🛠 Шпаргалка по инфраструктуре
+
+**Архитектура:**
+```
+Telegram ──▶ Бот (BotHost, python bot.py)
+                ├─▶ Cloudflare Worker ──▶ OpenRouter (ключ спрятан в воркере)
+                └─▶ Neon Postgres (данные пользователей, jsonb)
+```
+
+**Переменные окружения (BotHost):**
+| Переменная | Назначение |
+|---|---|
+| `BOT_TOKEN` | токен @BotFather |
+| `OPENROUTER_BASE_URL` | URL Cloudflare-воркера (без `/chat/completions`) |
+| `PROXY_SECRET` | общий пароль бот ↔ воркер |
+| `TEXT_MODEL` | `google/gemini-2.5-flash` |
+| `VISION_MODEL` | `google/gemini-2.5-flash` |
+| `DATABASE_URL` | строка подключения Neon Postgres |
+
+> ⚠️ Ключ OpenRouter (`OPENROUTER_API_KEY`) и `PROXY_SECRET` лежат **только в секретах
+> Cloudflare-воркера** и переменных BotHost — в репозиторий их не коммитим.
+
+**Cloudflare Worker** (`gym-openrouter-proxy`): секреты `OPENROUTER_API_KEY` + `PROXY_SECRET`,
+проверяет заголовок `X-Proxy-Secret`, подставляет ключ, проксирует на `openrouter.ai/api/v1`.
+Деплой и код — в [worker/README.md](worker/README.md).
+
+**Модели:** OpenRouter, слаги Gemini — версия `2.5` (старые `gemini-2.0`/`flash-1.5` удалены).
+Дешевле — `google/gemini-2.5-flash-lite`. Vision и текст обслуживает одна и та же модель.
+
+**Хранилище:** Neon free — 0.5 ГБ (~25k юзеров). Фото НЕ сохраняются (анализ в памяти).
+История чата ограничена 20 сообщениями. План кэшируется, регенерится только по кнопке.
+
+**Заметки по эксплуатации:**
+- Ответы ИИ шлются с `parse_mode=None` (Markdown от модели ломал Telegram-парсер).
+- `httpx` запинен на `0.27.2` (0.28+ несовместим с openai из-за аргумента `proxies`).
+- JS-воркер вынесен из репо в README, иначе BotHost пытался запускать его через Node.
 
 > ⚠️ Рекомендации носят информационный характер. При проблемах со здоровьем —
 > консультируйтесь с врачом.
