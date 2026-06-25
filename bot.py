@@ -200,18 +200,43 @@ async def f_goal(msg: Message, state: FSMContext):
     storage.save_user(msg.from_user.id, u)
     await state.clear()
     await msg.answer("✅ Анкета сохранена! Генерирую план…", reply_markup=MAIN_KB)
+    await gen_ai_plan(msg, msg.from_user.id, profile)
+
+
+# ---------- План ИИ (диета + тренировки текстом, сохраняется) ----------
+def aiplan_kb() -> InlineKeyboardMarkup:
+    return inline([[("🔄 Обновить план", "aiplan:gen")]])
+
+
+async def gen_ai_plan(msg: Message, uid: int, profile: dict):
     plan = await with_thinking(msg, ai.build_plan, profile)
+    u = storage.get_user(uid)
+    u["ai_plan"] = plan
+    storage.save_user(uid, u)
     await send_long(msg, plan)
+    await msg.answer("👆 Это твой сохранённый план. Обновить — кнопкой ниже.", reply_markup=aiplan_kb())
 
 
-# ---------- План ИИ (диета + тренировки текстом) ----------
 @dp.message(F.text == "🍽 План ИИ")
 async def ai_plan(msg: Message):
-    profile = storage.get_profile(msg.from_user.id)
-    if not profile:
+    u = storage.get_user(msg.from_user.id)
+    if not u.get("profile"):
         return await msg.answer("Сначала заполни «📋 Анкета».")
-    plan = await with_thinking(msg, ai.build_plan, profile)
-    await send_long(msg, plan)
+    saved = u.get("ai_plan")
+    if saved:
+        await send_long(msg, saved)
+        await msg.answer("👆 Сохранённый план. Чтобы пересоздать — кнопка ниже.", reply_markup=aiplan_kb())
+    else:
+        await gen_ai_plan(msg, msg.from_user.id, u["profile"])
+
+
+@dp.callback_query(F.data == "aiplan:gen")
+async def ai_plan_regen(cb: CallbackQuery):
+    profile = storage.get_profile(cb.from_user.id)
+    if not profile:
+        return await cb.answer("Сначала заполни анкету", show_alert=True)
+    await cb.answer("Генерирую заново…")
+    await gen_ai_plan(cb.message, cb.from_user.id, profile)
 
 
 # ---------- Мои тренировки (редактируемый план) ----------
