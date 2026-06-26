@@ -115,12 +115,22 @@ async def send_long(target, text: str):
         await target.answer(chunk, parse_mode=None)
 
 
-async def with_thinking(msg: Message, fn, *args):
+# Пользователи, для которых сейчас идёт ИИ-запрос — чтобы не плодить дубли
+BUSY: set[int] = set()
+
+
+async def with_thinking(msg: Message, uid: int, fn, *args):
+    """Блокирует повторные ИИ-запросы юзера. Вернёт None, если он уже занят."""
+    if uid in BUSY:
+        await msg.answer("⏳ Подожди, я ещё думаю над предыдущим запросом…")
+        return None
+    BUSY.add(uid)
     note = await msg.answer("⏳ Секундочку, думаю над ответом…")
     await bot.send_chat_action(msg.chat.id, ChatAction.TYPING)
     try:
         return await asyncio.to_thread(fn, *args)
     finally:
+        BUSY.discard(uid)
         try:
             await note.delete()
         except Exception:
@@ -196,6 +206,13 @@ async def start(msg: Message, state: FSMContext):
 async def go_back(msg: Message, state: FSMContext):
     await state.clear()
     await msg.answer("Главное меню 👇", reply_markup=MAIN_KB)
+
+
+@dp.callback_query(F.data == "menu")
+async def menu_cb(cb: CallbackQuery, state: FSMContext):
+    await state.clear()
+    await cb.answer()
+    await cb.message.answer("Главное меню 👇", reply_markup=MAIN_KB)
 
 
 # ---------- Анкета: вход ----------
@@ -432,7 +449,9 @@ def aiplan_kb() -> InlineKeyboardMarkup:
 
 
 async def gen_ai_plan(msg: Message, uid: int, profile: dict):
-    plan = await with_thinking(msg, ai.build_plan, profile)
+    plan = await with_thinking(msg, uid, ai.build_plan, profile)
+    if plan is None:  # юзер уже занят другим запросом
+        return
     u = storage.get_user(uid)
     u["ai_plan"] = plan
     storage.save_user(uid, u)
@@ -479,6 +498,7 @@ def plan_menu() -> InlineKeyboardMarkup:
         [("🤖 Сгенерировать ИИ", "plan:gen")],
         [("➕ Добавить упражнение", "plan:add"), ("✏️ Изменить", "plan:edit")],
         [("🗑 Очистить план", "plan:clear")],
+        [("🏠 Меню", "menu")],
     ])
 
 
@@ -490,9 +510,13 @@ async def my_workouts(msg: Message):
 
 @dp.callback_query(F.data == "plan:gen")
 async def plan_gen(cb: CallbackQuery):
-    profile = storage.get_profile(cb.from_user.id)
+    uid = cb.from_user.id
+    profile = storage.get_profile(uid)
     if not profile:
         return await cb.answer("Сначала заполни анкету", show_alert=True)
+    if uid in BUSY:
+        return await cb.answer("⏳ Подожди, уже генерирую…", show_alert=False)
+    BUSY.add(uid)
     await cb.answer()
     note = await cb.message.answer("⏳ Собираю план тренировок…")
     try:
@@ -500,9 +524,11 @@ async def plan_gen(cb: CallbackQuery):
     except Exception as e:
         logging.exception("plan json")
         return await note.edit_text(f"⚠️ Не удалось: {e}")
-    u = storage.get_user(cb.from_user.id)
+    finally:
+        BUSY.discard(uid)
+    u = storage.get_user(uid)
     u["plan"] = plan
-    storage.save_user(cb.from_user.id, u)
+    storage.save_user(uid, u)
     await note.delete()
     await cb.message.answer(render_plan(plan), reply_markup=plan_menu())
 
@@ -711,6 +737,7 @@ def tracker_kb() -> InlineKeyboardMarkup:
         [("🥩 +20 г белка", "p:20"), ("🥩 +30 г белка", "p:30")],
         [("✏️ Своя вода", "add:water"), ("✏️ Свой белок", "add:protein")],
         [("🎯 Цель воды", "goal:water"), ("🎯 Цель белка", "goal:protein")],
+        [("🏠 Меню", "menu")],
     ])
 
 
@@ -809,6 +836,7 @@ def rem_kb(s: dict) -> InlineKeyboardMarkup:
         [("📅 Дни тренировок", "rdays"), ("🕐 Время", "tt:workout")],
         [(f"{t(s['creatine_reminder'])} Креатин", "r:creatine"), ("🕐 Время", "tt:creatine")],
         [(f"{t(s['water_reminder'])} Вода", "r:water")],
+        [("🏠 Меню", "menu")],
     ])
 
 
@@ -902,6 +930,7 @@ def sleep_kb(s: dict) -> InlineKeyboardMarkup:
         [(f"{t} Напоминание о сне", "r:sleep")],
         [("🕐 Время сна", "tt:sleep")],
         [("🛏 Ложусь спать", "sleep:now")],
+        [("🏠 Меню", "menu")],
     ])
 
 
@@ -930,10 +959,12 @@ async def on_photo(msg: Message):
     image_bytes = buf.read()
     profile = storage.get_profile(msg.from_user.id)
     try:
-        result = await with_thinking(msg, ai.analyze_photo, image_bytes, profile)
+        result = await with_thinking(msg, msg.from_user.id, ai.analyze_photo, image_bytes, profile)
     except Exception as e:
         logging.exception("vision")
         return await msg.answer(f"⚠️ Не удалось проанализировать фото: {e}")
+    if result is None:
+        return
     await send_long(msg, result)
 
 
@@ -952,10 +983,12 @@ async def chat_answer(msg: Message, state: FSMContext):
     u = storage.get_user(msg.from_user.id)
     history = u["history"][-12:]
     try:
-        answer = await with_thinking(msg, ai.ask_coach, msg.text, u["profile"], history)
+        answer = await with_thinking(msg, msg.from_user.id, ai.ask_coach, msg.text, u["profile"], history)
     except Exception as e:
         logging.exception("chat")
         return await msg.answer(f"⚠️ Ошибка: {e}")
+    if answer is None:
+        return
     # сохраняем память
     u["history"].append({"role": "user", "content": msg.text})
     u["history"].append({"role": "assistant", "content": answer})
