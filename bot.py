@@ -17,6 +17,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
     Message,
     CallbackQuery,
+    ErrorEvent,
     ReplyKeyboardMarkup,
     KeyboardButton,
     ReplyKeyboardRemove,
@@ -760,6 +761,24 @@ async def chat_answer(msg: Message, state: FSMContext):
 @dp.message(StateFilter(None))
 async def fallback(msg: Message):
     await msg.answer("Выбери действие на клавиатуре ниже 👇", reply_markup=MAIN_KB)
+
+
+# ---------- Глобальный перехват ошибок (бот не падает) ----------
+@dp.errors()
+async def on_error(event: ErrorEvent):
+    logging.exception("Необработанная ошибка", exc_info=event.exception)
+    upd = event.update
+    try:
+        if upd.callback_query:
+            await upd.callback_query.answer("⚠️ Не получилось, попробуй ещё раз", show_alert=False)
+        elif upd.message:
+            await upd.message.answer(
+                "⚠️ Упс, что-то пошло не так. Нажми /start и попробуй снова.",
+                reply_markup=MAIN_KB,
+            )
+    except Exception:
+        pass
+    return True  # ошибка обработана — бот продолжает работать
 
 
 async def main():

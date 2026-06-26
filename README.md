@@ -107,6 +107,44 @@ Telegram ──▶ Бот (BotHost, python bot.py)
 - `httpx` запинен на `0.27.2` (0.28+ несовместим с openai из-за аргумента `proxies`).
 - JS-воркер вынесен из репо в README, иначе BotHost пытался запускать его через Node.
 
+## 🤖 Как сменить модель ИИ
+
+Модель задаётся **переменными окружения** — код менять не надо.
+
+| Переменная | За что отвечает |
+|---|---|
+| `TEXT_MODEL` | планы, чат с тренером (текст) |
+| `VISION_MODEL` | анализ формы по фото (нужна модель с поддержкой зрения!) |
+
+**Чтобы сменить модель** — поменяй значение переменной на BotHost и сделай Redeploy.
+
+Рабочие слаги OpenRouter (актуальные):
+| Слаг | Текст | Фото | Цена (вход/выход за 1М) |
+|---|---|---|---|
+| `google/gemini-2.5-flash` | ✅ | ✅ | $0.30 / $2.50 — рекомендация |
+| `google/gemini-2.5-flash-lite` | ✅ | ✅ | $0.10 / $0.40 — дешевле |
+| `google/gemini-2.5-pro` | ✅ | ✅ | $1.25 / $10 — максимум качества |
+| `openai/gpt-4o-mini` | ✅ | ✅ | $0.15 / $0.60 |
+| `anthropic/claude-3.7-sonnet` | ✅ | ✅ | дороже, топ-планы |
+
+Полный каталог и цены: [openrouter.ai/models](https://openrouter.ai/models).
+
+> ⚠️ **Частая ошибка:** слаги вида `gemini-2.0-flash-001` или `gemini-flash-1.5`
+> **удалены** из OpenRouter и дают ошибку `No endpoints found` (404) — тренер «не
+> работает». Используй версии `2.5`. Проверить модель можно curl-ом:
+> ```bash
+> curl -X POST $OPENROUTER_BASE_URL/chat/completions \
+>   -H "Content-Type: application/json" -H "X-Proxy-Secret: $PROXY_SECRET" \
+>   -d '{"model":"google/gemini-2.5-flash","messages":[{"role":"user","content":"тест"}]}'
+> ```
+> Если в ответе `choices` — модель рабочая; если `error` — поменяй слаг.
+
+Можно развести задачи, например дешёвый чат + качественные планы:
+```
+TEXT_MODEL=google/gemini-2.5-flash
+VISION_MODEL=google/gemini-2.5-flash-lite
+```
+
 ## 🔖 Версии и бэкап
 Стабильные версии помечаются git-тегами.
 - `v1.0-stable` — полный функционал: планы, чек-ин, статистика, напоминания,
