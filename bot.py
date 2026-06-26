@@ -99,6 +99,23 @@ MAIN_KB = kb(
     ["💬 Тренер", "📸 Оценить форму"],
 )
 
+# Кнопки главного меню — при их нажатии сбрасываем любой незавершённый ввод
+MENU_BUTTONS = {
+    "📋 Анкета", "🍽 План ИИ", "🏋️ Мои тренировки", "✅ Пришёл в зал",
+    "📊 Статистика", "💧 Вода/Белок", "⏰ Напоминания", "😴 Сон",
+    "💬 Тренер", "📸 Оценить форму", "⬅️ Назад",
+}
+
+
+@dp.message.outer_middleware()
+async def reset_state_on_menu(handler, event, data):
+    """Если юзер нажал кнопку меню посреди ввода — сбрасываем состояние."""
+    if getattr(event, "text", None) in MENU_BUTTONS:
+        state = data.get("state")
+        if state is not None:
+            await state.clear()
+    return await handler(event, data)
+
 
 def inline(rows) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
