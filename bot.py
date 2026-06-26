@@ -55,6 +55,7 @@ class Misc(StatesGroup):
     gym_note = State()
     set_time = State()
     set_goal = State()
+    custom_intake = State()
 
 
 # ---------- Клавиатуры ----------
@@ -130,6 +131,13 @@ async def start(msg: Message, state: FSMContext):
         "👇 Жми «📋 Анкета» — и начинаем работу над собой!",
         reply_markup=MAIN_KB,
     )
+
+
+# ---------- Назад в меню (работает из любого состояния) ----------
+@dp.message(F.text == "⬅️ Назад")
+async def go_back(msg: Message, state: FSMContext):
+    await state.clear()
+    await msg.answer("Главное меню 👇", reply_markup=MAIN_KB)
 
 
 # ---------- Анкета ----------
@@ -429,7 +437,7 @@ async def gym_checkin(msg: Message, state: FSMContext):
     await state.set_state(Misc.gym_note)
     await msg.answer(
         "💪 Отлично, отмечаю! Что сегодня качал?",
-        reply_markup=kb(["Грудь", "Спина", "Ноги"], ["Руки", "Плечи", "Кардио"], ["Всё тело", "Пропустить"]),
+        reply_markup=kb(["Грудь", "Спина", "Ноги"], ["Руки", "Плечи", "Кардио"], ["Всё тело", "Пропустить"], ["⬅️ Назад"]),
     )
 
 
@@ -493,6 +501,7 @@ def tracker_kb() -> InlineKeyboardMarkup:
     return inline([
         [("💧 +250 мл", "w:250"), ("💧 +500 мл", "w:500")],
         [("🥩 +20 г белка", "p:20"), ("🥩 +30 г белка", "p:30")],
+        [("✏️ Своя вода", "add:water"), ("✏️ Свой белок", "add:protein")],
         [("🎯 Цель воды", "goal:water"), ("🎯 Цель белка", "goal:protein")],
     ])
 
@@ -521,6 +530,31 @@ async def add_protein(cb: CallbackQuery):
     storage.save_user(cb.from_user.id, u)
     await cb.answer(f"+{g} г белка 🥩")
     await cb.message.edit_text(tracker_text(u), reply_markup=tracker_kb())
+
+
+@dp.callback_query(F.data.startswith("add:"))
+async def custom_intake_q(cb: CallbackQuery, state: FSMContext):
+    target = cb.data.split(":")[1]  # water / protein
+    await state.update_data(intake_target=target)
+    await state.set_state(Misc.custom_intake)
+    await cb.answer()
+    unit = "мл воды" if target == "water" else "г белка"
+    await cb.message.answer(f"Сколько {unit} добавить? Введи число:", reply_markup=kb(["⬅️ Назад"]))
+
+
+@dp.message(Misc.custom_intake)
+async def custom_intake(msg: Message, state: FSMContext):
+    if not msg.text.isdigit():
+        return await msg.answer("Введи число, например 350")
+    d = await state.get_data()
+    u = storage.get_user(msg.from_user.id)
+    key = "water" if d["intake_target"] == "water" else "protein"
+    u[key][today()] = u[key].get(today(), 0) + int(msg.text)
+    storage.save_user(msg.from_user.id, u)
+    await state.clear()
+    unit = "мл воды 💧" if key == "water" else "г белка 🥩"
+    await msg.answer(f"✅ Добавлено {msg.text} {unit}", reply_markup=MAIN_KB)
+    await msg.answer(tracker_text(u), reply_markup=tracker_kb())
 
 
 @dp.callback_query(F.data.startswith("goal:"))
@@ -699,7 +733,10 @@ async def on_photo(msg: Message):
 @dp.message(F.text == "💬 Тренер")
 async def chat_start(msg: Message, state: FSMContext):
     await state.set_state(Form.chat)
-    await msg.answer("Задай любой вопрос про тренировки, питание, восстановление. Я помню наш диалог. Выход — /start")
+    await msg.answer(
+        "Задай любой вопрос про тренировки, питание, восстановление. Я помню наш диалог.",
+        reply_markup=kb(["⬅️ Назад"]),
+    )
 
 
 @dp.message(Form.chat)
