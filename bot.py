@@ -107,6 +107,12 @@ def today() -> str:
     return date.today().isoformat()
 
 
+def safe_md(s) -> str:
+    """Убирает символы, ломающие легаси-Markdown Telegram, из свободного текста."""
+    return (str(s).replace("*", "").replace("_", "")
+            .replace("`", "").replace("[", "(").replace("]", ")"))
+
+
 # ---------- Старт ----------
 @dp.message(Command("start"))
 async def start(msg: Message, state: FSMContext):
@@ -247,7 +253,7 @@ def render_plan(plan: dict) -> str:
     for day, exs in plan.items():
         out.append(f"\n📅 *{day}*")
         for i, e in enumerate(exs, 1):
-            out.append(f"  {i}. {e['name']} — {e['sets']}, ⚖️ {e['weight']}")
+            out.append(f"  {i}. {safe_md(e['name'])} — {safe_md(e['sets'])}, ⚖️ {safe_md(e['weight'])}")
     return "\n".join(out)
 
 
@@ -436,7 +442,7 @@ async def gym_note(msg: Message, state: FSMContext):
     total = len(u["visits"])
     await msg.answer(
         f"✅ Записал поход в зал ({date.today().strftime('%d.%m')})"
-        + (f": {note}" if note else "") + f"\nВсего тренировок: {total} 🔥",
+        + (f": {safe_md(note)}" if note else "") + f"\nВсего тренировок: {total} 🔥",
         reply_markup=MAIN_KB,
     )
 
@@ -459,7 +465,7 @@ async def stats(msg: Message):
     ]
     for v in visits[-10:][::-1]:
         d = date.fromisoformat(v["date"]).strftime("%d.%m")
-        out.append(f"• {d} — {v['note'] or 'тренировка'}")
+        out.append(f"• {d} — {safe_md(v['note']) or 'тренировка'}")
     # вода за сегодня
     w = u["water"].get(today(), 0)
     out.append(f"\n💧 Вода сегодня: {w} мл")
@@ -557,7 +563,7 @@ def rem_kb(s: dict) -> InlineKeyboardMarkup:
     t = lambda b: "✅" if b else "❌"
     return inline([
         [(f"{t(s['workout_reminder'])} Тренировки", "r:workout")],
-        [("📅 Дни тренировок", "r:days"), ("🕐 Время", "tt:workout")],
+        [("📅 Дни тренировок", "rdays"), ("🕐 Время", "tt:workout")],
         [(f"{t(s['creatine_reminder'])} Креатин", "r:creatine"), ("🕐 Время", "tt:creatine")],
         [(f"{t(s['water_reminder'])} Вода", "r:water")],
     ])
@@ -580,7 +586,7 @@ async def toggle_rem(cb: CallbackQuery):
     await cb.message.edit_text(rem_text(u["settings"]), reply_markup=rem_kb(u["settings"]))
 
 
-@dp.callback_query(F.data == "r:days")
+@dp.callback_query(F.data == "rdays")
 async def rem_days(cb: CallbackQuery):
     u = storage.get_user(cb.from_user.id)
     sel = u["settings"]["workout_days"]
